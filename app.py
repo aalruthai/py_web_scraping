@@ -1,6 +1,6 @@
+import sys
 import time
-import pandas
-import math
+import traceback
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
@@ -10,22 +10,14 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
 from selenium.common import exceptions
-from bs4 import BeautifulSoup
 import time
+import sqlite3
 
-class wait_for_non_empty_text(object):
-    def __init__(self, locator):
-        self.locator = locator
 
-    def __call__(self, driver):
-        try:
-            element_text = EC._find_element(driver, self.locator).text.strip()
-            return element_text != ""
-        except exceptions.StaleElementReferenceException:
-            return False
-
-def wait_for_non_empty_textf(locator):
-    
+def wait_for_non_empty_text(locator):
+    """
+    This function to check if an element has any text
+    """
 
     def _predicate(driver):
         try:
@@ -35,109 +27,104 @@ def wait_for_non_empty_textf(locator):
             return False
 
     return _predicate    
-balance = "Exports"
+
+conn = sqlite3.connect('jodidb.db')
+
+try:
+    conn.execute('''
+    CREATE TABLE exports
+    (country TEXT, month_year TEXT, value int);
+    ''')
+except:
+    pass
+
+def insert_data(country, monthyear, value):
+    conn.execute('''
+    INSERT INTO exports (country, month_year, value) VALUES (?,?,?)
+    ''', (country, monthyear, value))
+
+balanceExportsScript = 'selectItem(2, 3)'
 
 delay = 5
 
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
-# Maximizing window to show as much rows as possible and reduce page scrollin
+# Maximizing window to show as much rows as possible and reduce page scrolling
 driver.maximize_window()
 url = "http://www.jodidb.org/TableViewer/tableView.aspx?ReportId=93906"
 
 driver.get(url)
-
+# Waiting for Scripts links to be loaded
 WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.XPATH, '//a[@href="javascript:onClickSelectOther(2);"]')))
 # Setting the balance to Exports by calling the javascript function directly
-driver.execute_script('selectItem(2, 3)')
-WebDriverWait(driver, delay).until(wait_for_non_empty_textf((By.XPATH, '//table[@id="DataTable"]/tbody/tr[last()]/th')))
+driver.execute_script(balanceExportsScript)
+WebDriverWait(driver, delay).until(wait_for_non_empty_text((By.XPATH, '//table[@id="DataTable"]/tbody/tr[last()]/th')))
 time.sleep(2)
 
-# WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.ID, 'RetrieveData')))
-# WebDriverWait(driver, delay).until(EC.visibility_of((By.ID, 'DataTable')))
-# body = driver.find_element(By.CLASS_NAME, 'DataTable')
-# print(body.get_attribute('innrerHtml'))
-# rows = body.find_elements(By.TAG_NAME, 'tr')
+# Getting tablr containing data
 element = driver.find_element(By.ID, 'DataTable')
+# Getting main page container to interact with page
 container = element.find_element(By.XPATH, '/html')
-print(element.get_attribute('style'))
-print('Waiting...')
-print(container.get_attribute('align'))
+
 time.sleep(3)
+# Getting Rows and Columns count from the page's javascript
 tableTotalRows = driver.execute_script('return M_tableRowCount;')
 tableColumns = driver.execute_script('return M_tableColCount;')
 
 print(f"{tableTotalRows} {tableColumns}")
-# driver.execute_script('window.scrollBy(0,document.body.scrollHeight)')
+
 time.sleep(1)
+
 months = []
 countries = []
 
-# WebDriverWait(driver, delay).until(EC.visibility_of(element))
-#WebDriverWait(driver, delay).until(EC.(element))
+# Getting Month-Year from table header
 head = element.find_element(By.TAG_NAME, 'thead')
 headRow = head.find_element(By.TAG_NAME, 'tr')
 headRowData = headRow.find_elements(By.CLASS_NAME, 'TVItemColHeader')
-# for hrd in headRowData:
-#     # print(hrd.text)
-#     months.append(hrd.text)
-    
+
+for hrd in headRowData:
+    months.append(hrd.text)
+
 body = element.find_element(By.TAG_NAME, 'tbody')
 rows = body.find_elements(By.TAG_NAME, 'tr')
-visibleRowsCount = len(rows)
-print(visibleRowsCount)
+
 processedRows = 0
 RemainingRows = tableTotalRows
-
-pages = math.ceil(tableTotalRows / visibleRowsCount)
-print(pages)
-while RemainingRows > 0:
-    # print(f"page {page}")
-    # if RemainingRows >= visibleRowsCount:
-    for row in rows:
-        country = row.find_element(By.TAG_NAME, 'th')
-        if country.text in countries:
-            continue
-        countryData = row.find_elements(By.TAG_NAME, 'td')
-        print(country.text)
-        # for i in range(0, len(headRowData)):
-        #     print(f'{country.text}   {headRowData[i].text}   {countryData[i].text}')
-        processedRows += 1
-        countries.append(country.text)
-        # tds = row.find_elements(By.TAG_NAME, 'td')
-        # for td in tds:
-        #     print(td.text)
-    # else:
-    #     lastRowsCount = len(rows)
-    #     rowsToByPass = lastRowsCount - RemainingRows
-    #     for i in range(rowsToByPass, lastRowsCount):
-    #         country = rows[i].find_element(By.TAG_NAME, 'th')
-    #         print(country.text)
-    #         processedRows += 1
-    container.send_keys(Keys.PAGE_DOWN)
-    RemainingRows = RemainingRows - processedRows
-    print(f"processed {processedRows}, Remaining {RemainingRows}")
-    processedRows = 0
-    time.sleep(1)
-    rows = body.find_elements(By.TAG_NAME, 'tr')
-# with open("f1.txt","w") as file:
-#     # for m in months:
-#     #     file.write(f"{m}\n")
-    
-#     for c in countries:
-#         file.write(f"{c}\n")
+processedRowsTotal = 0
+try:
+    while RemainingRows > 0:
         
-print("sss")
-# exporstLink = btn.find_element(By.ID, 'a-el-d2-mi3')
-# print(exporstLink.text)
+        for row in rows:
+            country = row.find_element(By.TAG_NAME, 'th')
+            if country.text in countries:
+                continue
+            countryData = row.find_elements(By.TAG_NAME, 'td')
+            print(f'Processing {country.text}...')
+            for i in range(0, len(headRowData)):
+                insert_data(country.text, headRowData[i].text, countryData[i].text)
+                # print(f'{country.text}   {headRowData[i].text}   {countryData[i].text}')
+            conn.commit()
+            processedRows += 1
+            countries.append(country.text)
+            
+        # Scrolling down page by page, each scroll will cause the table to refilled
+        container.send_keys(Keys.PAGE_DOWN)
+        # tracking count of processed countries
+        RemainingRows = RemainingRows - processedRows
+        processedRowsTotal += processedRows
+        print(f"iteratiom processed {processedRows}, Total processed {processedRowsTotal}, Remaining {RemainingRows}")
+        processedRows = 0
+        time.sleep(1)
+        rows = body.find_elements(By.TAG_NAME, 'tr')
+    
 
-# btn.click()
-# try:
-#     WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'DataTable')))
-#     WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'DataTable')))
-# except TimeoutException: 
-#     print('Timedout')
-# else:
-#     with open('test.html', 'w', encoding='utf-8') as file:
-#         file.write(driver.page_source)
-# finally:
-#     driver.quit()
+except sqlite3.Error as er:
+    print('SQLite error: %s' % (' '.join(er.args)))
+    print("Exception class is: ", er.__class__)
+    print('SQLite traceback: ')
+    exc_type, exc_value, exc_tb = sys.exc_info()
+    print(traceback.format_exception(exc_type, exc_value, exc_tb))
+finally:
+    conn.close()
+    driver.quit()
+
