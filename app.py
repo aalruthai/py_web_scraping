@@ -101,7 +101,7 @@ try:
             countryData = row.find_elements(By.TAG_NAME, 'td')
             print(f'Processing {country.text}...')
             for i in range(0, len(headRowData)):
-                insert_data(country.text, headRowData[i].text, countryData[i].text)
+                insert_data(country.text, headRowData[i].text, countryData[i].text.replace(",", ""))
                 # print(f'{country.text}   {headRowData[i].text}   {countryData[i].text}')
             conn.commit()
             processedRows += 1
