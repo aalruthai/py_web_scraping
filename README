@@ -1,0 +1,6 @@
+
+# Python Web Scraper
+
+This web scraper provides a simple example for scraping a javascript web site
+The web site used in this example is http://www.jodidb.org/TableViewer/tableView.aspx?ReportId=93906
+
